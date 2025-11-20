@@ -7,23 +7,25 @@ const cheerio = require('cheerio');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static('.')); // Раздаем статические файлы
 
-// Функция парсинга с точными селекторами для маркетплейсов
+// Универсальная функция парсинга
 async function parseProduct(url) {
     try {
+        console.log('🔄 Парсим URL:', url);
+        
         const { data } = await axios.get(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+                'Referer': 'https://www.google.com/'
             },
-            timeout: 10000
+            timeout: 15000
         });
         
         const $ = cheerio.load(data);
-        const hostname = new URL(url).hostname;
+        console.log('✅ HTML загружен');
 
         let productData = {
             title: '',
@@ -33,114 +35,72 @@ async function parseProduct(url) {
             images: []
         };
 
-        // Wildberries
-        if (hostname.includes('wildberries')) {
-            productData.title = $('h1').first().text().trim() || $('[data-link="text{:productName^productName}"]').text().trim();
-            productData.price = $('.price-block__final-price').text().trim() || $('.final-price').text().trim();
-            productData.description = $('.pdp-description-text').text().trim() || $('.description-section').text().trim();
-            
-            // Характеристики Wildberries
-            $('.product-params__item').each((i, elem) => {
-                const name = $(elem).find('.product-params__label').text().trim();
-                const value = $(elem).find('.product-params__value').text().trim();
-                if (name && value) {
-                    productData.characteristics.push({ name, value });
-                }
-            });
+        // УНИВЕРСАЛЬНЫЕ СЕЛЕКТОРЫ ДЛЯ ВСЕХ САЙТОВ
+        productData.title = $('h1').first().text().trim() || 
+                           $('[class*="title"]').first().text().trim() ||
+                           $('title').text().split('|')[0].trim();
 
-            // Изображения Wildberries
-            $('.photo-zoom__preview').each((i, elem) => {
-                let src = $(elem).attr('src');
-                if (src) {
-                    src = src.replace('//', 'https://');
-                    productData.images.push(src);
-                }
-            });
+        productData.price = $('[class*="price"]').first().text().trim() ||
+                           $('[class*="cost"]').first().text().trim() ||
+                           'Цена не указана';
 
-        // Ozon
-        } else if (hostname.includes('ozon')) {
-            productData.title = $('h1').first().text().trim() || $('.ya1').text().trim();
-            productData.price = $('[data-widget="webPrice"]').text().trim() || $('.ly1').text().trim();
-            productData.description = $('[data-widget="webDescription"]').text().trim() || $('.qy1').text().trim();
-            
-            // Характеристики Ozon
-            $('.w9k').each((i, elem) => {
-                const name = $(elem).find('.w9k-d8').text().trim();
-                const value = $(elem).find('.w9k-d9').text().trim();
-                if (name && value) {
-                    productData.characteristics.push({ name, value });
-                }
-            });
+        productData.description = $('[class*="description"]').first().text().trim() ||
+                                 $('[class*="about"]').first().text().trim() ||
+                                 $('meta[name="description"]').attr('content') ||
+                                 'Описание отсутствует';
 
-            // Изображения Ozon
-            $('.jy1 img').each((i, elem) => {
-                let src = $(elem).attr('src');
-                if (src && src.includes('cdn1.ozone')) {
-                    src = 'https:' + src;
-                    productData.images.push(src);
-                }
-            });
-
-        // Amazon
-        } else if (hostname.includes('amazon')) {
-            productData.title = $('#productTitle').text().trim() || $('h1.a-size-large').text().trim();
-            productData.price = $('.a-price-whole').first().text().trim() || $('.a-price .a-offscreen').text().trim();
-            productData.description = $('#productDescription').text().trim() || $('.product-description').text().trim();
-            
-            // Характеристики Amazon
-            $('#productDetails_detailBullets_sections1 tr').each((i, elem) => {
-                const name = $(elem).find('th').text().trim();
-                const value = $(elem).find('td').text().trim();
-                if (name && value) {
-                    productData.characteristics.push({ name, value });
-                }
-            });
-
-            // Изображения Amazon
-            $('#altImages img').each((i, elem) => {
-                let src = $(elem).attr('src');
-                if (src) {
-                    src = src.replace(/_SS40_|_SX38_/, '_SL1500_');
-                    productData.images.push(src);
-                }
-            });
-
-        // Универсальный парсер для других сайтов
-        } else {
-            productData.title = $('h1').first().text().trim() || $('.product-title').text().trim();
-            productData.price = $('.price').first().text().trim() || $('.product-price').text().trim();
-            productData.description = $('.product-description').text().trim() || $('.description').text().trim();
-            
-            // Универсальные характеристики
-            $('table tr, .specifications li, .characteristics li').each((i, elem) => {
-                const text = $(elem).text().trim();
-                if (text.includes(':') || text.includes('—')) {
-                    const separator = text.includes(':') ? ':' : '—';
-                    const [name, value] = text.split(separator).map(s => s.trim());
-                    if (name && value) {
+        // ХАРАКТЕРИСТИКИ - универсальные
+        $('table tr, dl, [class*="spec"] li, [class*="char"] li').each((i, elem) => {
+            const text = $(elem).text().trim();
+            if (text && (text.includes(':') || text.includes('—'))) {
+                const separator = text.includes(':') ? ':' : '—';
+                const parts = text.split(separator);
+                if (parts.length >= 2) {
+                    const name = parts[0].trim();
+                    const value = parts.slice(1).join(separator).trim();
+                    if (name && value && name.length < 100) {
                         productData.characteristics.push({ name, value });
                     }
                 }
-            });
+            }
+        });
 
-            // Универсальные изображения
-            $('.product-gallery img, .gallery img, [class*="image"] img').each((i, elem) => {
-                let src = $(elem).attr('src') || $(elem).attr('data-src');
-                if (src) {
-                    if (src.startsWith('//')) src = 'https:' + src;
-                    else if (src.startsWith('/')) src = new URL(src, url).href;
-                    if (!src.startsWith('data:')) {
-                        productData.images.push(src);
-                    }
+        // ИЗОБРАЖЕНИЯ - универсальные
+        $('img').each((i, elem) => {
+            let src = $(elem).attr('src') || $(elem).attr('data-src');
+            if (src) {
+                // Преобразуем относительные ссылки в абсолютные
+                if (src.startsWith('//')) {
+                    src = 'https:' + src;
+                } else if (src.startsWith('/')) {
+                    const baseUrl = new URL(url).origin;
+                    src = baseUrl + src;
                 }
-            });
-        }
+                
+                // Фильтруем маленькие иконки и логотипы
+                if (src && 
+                    !src.includes('icon') && 
+                    !src.includes('logo') && 
+                    !src.includes('sprite') &&
+                    !src.startsWith('data:') &&
+                    (src.includes('product') || 
+                     src.includes('goods') || 
+                     $(elem).attr('alt')?.toLowerCase().includes('product') ||
+                     src.match(/\.(jpg|jpeg|png|webp)$/i))) {
+                    productData.images.push(src);
+                }
+            }
+        });
 
-        // Фильтрация и очистка данных
-        productData.images = [...new Set(productData.images)].slice(0, 12); // Убираем дубликаты
-        productData.characteristics = productData.characteristics.filter(char => 
-            char.name && char.value && char.name.length < 100
-        );
+        // Ограничиваем количество изображений и убираем дубликаты
+        productData.images = [...new Set(productData.images)].slice(0, 8);
+
+        console.log('✅ Данные получены:', {
+            title: productData.title?.substring(0, 50),
+            price: productData.price,
+            characteristics: productData.characteristics.length,
+            images: productData.images.length
+        });
 
         return {
             success: true,
@@ -148,9 +108,10 @@ async function parseProduct(url) {
         };
         
     } catch (error) {
+        console.error('❌ Ошибка парсинга:', error.message);
         return {
             success: false,
-            error: `Ошибка парсинга: ${error.message}`
+            error: `Не удалось получить данные: ${error.message}`
         };
     }
 }
@@ -160,21 +121,32 @@ app.post('/parse', async (req, res) => {
     const { url } = req.body;
     
     if (!url) {
-        return res.status(400).json({ success: false, error: 'URL обязателен' });
+        return res.status(400).json({ 
+            success: false, 
+            error: 'URL обязателен' 
+        });
     }
-    
+
     try {
+        console.log('📨 Получен запрос для:', url);
         const result = await parseProduct(url);
         res.json(result);
     } catch (error) {
+        console.error('💥 Серверная ошибка:', error);
         res.status(500).json({ 
             success: false, 
-            error: `Серверная ошибка: ${error.message}` 
+            error: `Внутренняя ошибка сервера: ${error.message}` 
         });
     }
 });
 
+// Корневой маршрут
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/Parser Studio Pro.html');
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`✅ Parser Studio Pro запущен на порту ${PORT}`);
+    console.log(`🚀 Parser Studio Pro запущен: http://localhost:${PORT}`);
+    console.log(`✅ Сервер готов к работе!`);
 });
