@@ -1,152 +1,69 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
-const cheerio = require('cheerio');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static('.')); // Раздаем статические файлы
+app.use(express.static('.'));
 
-// Универсальная функция парсинга
-async function parseProduct(url) {
-    try {
-        console.log('🔄 Парсим URL:', url);
-        
-        const { data } = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
-                'Referer': 'https://www.google.com/'
-            },
-            timeout: 15000
-        });
-        
-        const $ = cheerio.load(data);
-        console.log('✅ HTML загружен');
-
-        let productData = {
-            title: '',
-            price: '',
-            description: '',
-            characteristics: [],
-            images: []
-        };
-
-        // УНИВЕРСАЛЬНЫЕ СЕЛЕКТОРЫ ДЛЯ ВСЕХ САЙТОВ
-        productData.title = $('h1').first().text().trim() || 
-                           $('[class*="title"]').first().text().trim() ||
-                           $('title').text().split('|')[0].trim();
-
-        productData.price = $('[class*="price"]').first().text().trim() ||
-                           $('[class*="cost"]').first().text().trim() ||
-                           'Цена не указана';
-
-        productData.description = $('[class*="description"]').first().text().trim() ||
-                                 $('[class*="about"]').first().text().trim() ||
-                                 $('meta[name="description"]').attr('content') ||
-                                 'Описание отсутствует';
-
-        // ХАРАКТЕРИСТИКИ - универсальные
-        $('table tr, dl, [class*="spec"] li, [class*="char"] li').each((i, elem) => {
-            const text = $(elem).text().trim();
-            if (text && (text.includes(':') || text.includes('—'))) {
-                const separator = text.includes(':') ? ':' : '—';
-                const parts = text.split(separator);
-                if (parts.length >= 2) {
-                    const name = parts[0].trim();
-                    const value = parts.slice(1).join(separator).trim();
-                    if (name && value && name.length < 100) {
-                        productData.characteristics.push({ name, value });
-                    }
-                }
-            }
-        });
-
-        // ИЗОБРАЖЕНИЯ - универсальные
-        $('img').each((i, elem) => {
-            let src = $(elem).attr('src') || $(elem).attr('data-src');
-            if (src) {
-                // Преобразуем относительные ссылки в абсолютные
-                if (src.startsWith('//')) {
-                    src = 'https:' + src;
-                } else if (src.startsWith('/')) {
-                    const baseUrl = new URL(url).origin;
-                    src = baseUrl + src;
-                }
-                
-                // Фильтруем маленькие иконки и логотипы
-                if (src && 
-                    !src.includes('icon') && 
-                    !src.includes('logo') && 
-                    !src.includes('sprite') &&
-                    !src.startsWith('data:') &&
-                    (src.includes('product') || 
-                     src.includes('goods') || 
-                     $(elem).attr('alt')?.toLowerCase().includes('product') ||
-                     src.match(/\.(jpg|jpeg|png|webp)$/i))) {
-                    productData.images.push(src);
-                }
-            }
-        });
-
-        // Ограничиваем количество изображений и убираем дубликаты
-        productData.images = [...new Set(productData.images)].slice(0, 8);
-
-        console.log('✅ Данные получены:', {
-            title: productData.title?.substring(0, 50),
-            price: productData.price,
-            characteristics: productData.characteristics.length,
-            images: productData.images.length
-        });
-
-        return {
-            success: true,
-            data: productData
-        };
-        
-    } catch (error) {
-        console.error('❌ Ошибка парсинга:', error.message);
-        return {
-            success: false,
-            error: `Не удалось получить данные: ${error.message}`
-        };
-    }
-}
-
-// Маршрут для парсинга
+// Простой тестовый endpoint
 app.post('/parse', async (req, res) => {
     const { url } = req.body;
     
+    console.log('📨 Получен запрос для URL:', url);
+    
     if (!url) {
-        return res.status(400).json({ 
+        return res.json({ 
             success: false, 
             error: 'URL обязателен' 
         });
     }
 
     try {
-        console.log('📨 Получен запрос для:', url);
-        const result = await parseProduct(url);
-        res.json(result);
+        // ВРЕМЕННО: возвращаем тестовые данные вместо реального парсинга
+        const testData = {
+            success: true,
+            data: {
+                title: 'Тестовый товар - Смартфон Xiaomi Redmi Note 13 Pro',
+                price: '25 990 ₽',
+                description: 'Смартфон с AMOLED дисплеем 6.67", процессором Snapdragon 7s Gen 2 и камерой 200 МП. Отличное соотношение цены и качества.',
+                characteristics: [
+                    { name: 'Бренд', value: 'Xiaomi' },
+                    { name: 'Модель', value: 'Redmi Note 13 Pro' },
+                    { name: 'Экран', value: '6.67" AMOLED' },
+                    { name: 'Процессор', value: 'Snapdragon 7s Gen 2' },
+                    { name: 'Память', value: '8GB/256GB' },
+                    { name: 'Камера', value: '200 МП + 8 МП + 2 МП' },
+                    { name: 'Батарея', value: '5000 мАч' },
+                    { name: 'Цвет', value: 'Черный' }
+                ],
+                images: [
+                    'https://via.placeholder.com/400x400/FF6B00/white?text=Фото+1',
+                    'https://via.placeholder.com/400x400/001AFF/white?text=Фото+2',
+                    'https://via.placeholder.com/400x400/00FF6B/white?text=Фото+3'
+                ]
+            }
+        };
+
+        console.log('✅ Возвращаем тестовые данные');
+        res.json(testData);
+
     } catch (error) {
-        console.error('💥 Серверная ошибка:', error);
-        res.status(500).json({ 
+        console.error('❌ Ошибка:', error);
+        res.json({ 
             success: false, 
-            error: `Внутренняя ошибка сервера: ${error.message}` 
+            error: 'Технические работы. Попробуйте позже.' 
         });
     }
 });
 
 // Корневой маршрут
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/Parser Studio Pro.html');
+    res.sendFile(__dirname + '/parser.html');
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Parser Studio Pro запущен: http://localhost:${PORT}`);
-    console.log(`✅ Сервер готов к работе!`);
+    console.log(`🚀 Сервер запущен: http://localhost:${PORT}`);
+    console.log(`✅ Готов к работе!`);
 });
