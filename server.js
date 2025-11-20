@@ -10,9 +10,9 @@ app.use(express.static('.'));
 app.post('/parse', async (req, res) => {
     const { url } = req.body;
     
-    console.log('🔗 Получен URL:', url);
+    console.log('Получен URL:', url);
     
-    // Всегда возвращаем реалистичные тестовые данные
+    // Всегда возвращаем тестовые данные
     const testData = {
         success: true,
         data: {
@@ -26,33 +26,26 @@ app.post('/parse', async (req, res) => {
                 { name: "Процессор", value: "Snapdragon 7s Gen 2" },
                 { name: "Память", value: "8 ГБ ОЗУ / 256 ГБ ПЗУ" },
                 { name: "Камера", value: "200 МП + 8 МП + 2 МП" },
-                { name: "Фронтальная камера", value: "16 МП" },
                 { name: "Батарея", value: "5000 мАч" },
-                { name: "Зарядка", value: "67 Вт" },
-                { name: "Цвет", value: "Graphite Black" }
+                { name: "Зарядка", value: "67 Вт" }
             ],
             images: [
-                "https://via.placeholder.com/400x400/FF6B00/white?text=Фото+1+Смартфон",
-                "https://via.placeholder.com/400x400/001AFF/white?text=Фото+2+Задняя+панель",
-                "https://via.placeholder.com/400x400/00FF6B/white?text=Фото+3+Боковой+вид",
-                "https://via.placeholder.com/400x400/FF00FF/white?text=Фото+4+Камера",
-                "https://via.placeholder.com/400x400/FFFF00/white?text=Фото+5+Экран",
-                "https://via.placeholder.com/400x400/00FFFF/white?text=Фото+6+Комплектация",
-                "https://via.placeholder.com/400x400/FFA500/white?text=Фото+7+Цвет+вариант",
-                "https://via.placeholder.com/400x400/800080/white?text=Фото+8+Аксессуары"
+                "https://via.placeholder.com/400x400/FF6B00/white?text=Фото+1",
+                "https://via.placeholder.com/400x400/001AFF/white?text=Фото+2",
+                "https://via.placeholder.com/400x400/00FF6B/white?text=Фото+3"
             ]
         }
     };
 
-    console.log('✅ Возвращаем тестовые данные');
+    console.log('Возвращаем тестовые данные');
     res.json(testData);
 });
 
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/Parser Studio Pro.html');
+    res.sendFile(__dirname + '/parser.html');
 });
 
 const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Parser Studio Pro запущен: http://localhost:${PORT}`);
+    console.log(`Parser Studio Pro запущен: http://localhost:${PORT}`);
 });
